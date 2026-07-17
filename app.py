@@ -1,41 +1,40 @@
 import streamlit as st
 import numpy as np
-import pandas as pd
 import time
-from core import BioShieldEngine
+from core import BioShieldEngine, DecisionEngine
 
 st.set_page_config(page_title="Bio-Ambient Shield", layout="wide")
 
-st.title("🛡️ Bio-Ambient Shield: Real-Time Monitor")
-
 # Inicializace
 engine = BioShieldEngine()
-if 'data' not in st.session_state:
-    st.session_state.data = []
+decision = DecisionEngine()
 
-# Layout dashboardu
-col1, col2 = st.columns([2, 1])
+st.title("🛡️ Bio-Ambient Shield: Safety Monitor")
 
-with col1:
-    chart = st.empty() # Místo pro graf
+# Boční panel pro ovládání
+st.sidebar.header("Systémová nastavení")
+sim_alarm = st.sidebar.button("Testovat poplach")
 
-with col2:
-    status_box = st.empty() # Místo pro status
-
-# Simulace živých dat
-for i in range(100):
-    # Generování simulovaného signálu
-    t = np.linspace(0, 6.4, 128)
+# Simulace dat
+t = np.linspace(0, 6.4, 128)
+# Pokud stiskneme tlačítko, pošleme "nulová" data pro vyvolání alarmu
+if sim_alarm:
+    mock_data = np.zeros(128) 
+else:
     mock_data = np.sin(2 * np.pi * 0.5 * t) + np.random.normal(0, 0.1, 128)
+
+# Zpracování
+freqs, mags = engine.process_signal(mock_data)
+vitals = engine.extract_vitals(freqs, mags)
+status_msg = decision.evaluate_state(vitals)
+
+# Vizuální logika alarmu
+if decision.state == "CRITICAL_ALARM":
+    st.error(f"### {status_msg}")
+    st.balloons() # Pro extra pozornost
+else:
+    st.success(status_msg)
+
+# Zobrazení grafu
+st.line_chart(mock_data)
     
-    # Analýza
-    freqs, mags = engine.process_signal(mock_data)
-    vitals = engine.extract_vitals(freqs, mags)
-    
-    # Aktualizace dashboardu
-    chart.line_chart(mock_data)
-    
-    status_box.metric("Dechová frekvence", f"{vitals['respiratory_bpm']:.1f} BPM")
-    status_box.metric("Stav systému", "✅ Monitoruji")
-    
-    time.sleep(0.5)
