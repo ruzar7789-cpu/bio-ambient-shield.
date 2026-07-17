@@ -1,42 +1,37 @@
 import numpy as np
 
 class BioShieldEngine:
+    """Robustní DSP jádro pro analýzu vitálních funkcí."""
     def __init__(self, sampling_rate=20):
-        self.sampling_rate = sampling_rate
+        self.sr = sampling_rate
 
-    def process_signal(self, raw_data):
-        # Aplikace Hammingova okna pro eliminaci okrajových artefaktů
-        windowed = raw_data * np.hamming(len(raw_data))
-        fft = np.fft.rfft(windowed)
-        freqs = np.fft.rfftfreq(len(raw_data), 1/self.sampling_rate)
-        return freqs, np.abs(fft)
+    def process(self, raw_data):
+        # Detrendování signálu (odstranění DC posunu)
+        clean_data = raw_data - np.mean(raw_data)
+        # Hammingovo okno pro potlačení bočních laloků
+        windowed = clean_data * np.hamming(len(clean_data))
+        fft = np.abs(np.fft.rfft(windowed))
+        freqs = np.fft.rfftfreq(len(clean_data), 1/self.sr)
+        return freqs, fft
 
-    def extract_vitals(self, freqs, mag):
-        # Detekce dominantní frekvence v pásmech
-        resp_mask = (freqs >= 0.2) & (freqs <= 0.8)
-        heart_mask = (freqs >= 1.0) & (freqs <= 2.5)
+    def extract(self, freqs, fft):
+        # Definice frekvenčních pásem
+        r_band = (freqs >= 0.2) & (freqs <= 0.8)
+        h_band = (freqs >= 1.0) & (freqs <= 2.5)
         
-        resp_bpm = freqs[resp_mask][np.argmax(mag[resp_mask])] * 60 if any(resp_mask) else 0
-        heart_bpm = freqs[heart_mask][np.argmax(mag[heart_mask])] * 60 if any(heart_mask) else 0
-        
-        return {"resp": resp_bpm, "heart": heart_bpm}
+        resp = freqs[r_band][np.argmax(fft[r_band])] * 60 if any(r_band) else 0
+        heart = freqs[h_band][np.argmax(fft[h_band])] * 60 if any(h_band) else 0
+        return {"resp": resp, "heart": heart}
 
 class DecisionEngine:
+    """Stavový automat s historií (logování alarmů)."""
     def __init__(self):
-        self.state = "STABLE"
-        self.counter = 0
-        self.LIMIT = 5 # Vyšší práh pro vyšší spolehlivost
+        self.history = []
+        self.threshold = 5 
 
-    def evaluate(self, vitals):
-        # Pokud je dech pod 5 BPM po dobu 5 cyklů -> ALARM
-        if vitals['resp'] < 5:
-            self.counter += 1
-            if self.counter >= self.LIMIT:
-                self.state = "CRITICAL"
-                return "CRITICAL_ALARM"
-            return "WARNING"
-        
-        self.counter = 0
-        self.state = "STABLE"
-        return "OK"
+    def update(self, vitals):
+        is_critical = vitals['resp'] < self.threshold
+        state = "CRITICAL" if is_critical else "STABLE"
+        self.history.append({"time": np.datetime64('now'), "state": state})
+        return state
         
