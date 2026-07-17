@@ -9,8 +9,6 @@ class RadarInterface:
     def __init__(self, port='/dev/ttyUSB0', baudrate=921600, buffer_size=128):
         self.port = port
         self.baudrate = baudrate
-        # Kruhový zásobník (deque): jakmile se naplní 128 hodnotami, 
-        # přidání nové hodnoty automaticky vymaže tu nejstarší.
         self.buffer = deque(maxlen=buffer_size)
         self.buffer.extend(np.zeros(buffer_size))
         self.running = False
@@ -29,22 +27,13 @@ class RadarInterface:
     def _read_stream(self):
         """Tato smyčka běží na pozadí a plní buffer daty z USB."""
         try:
-            # ZATÍM ZAKOMENTOVÁNO: Reálné připojení k hardwaru
-            # with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
-            #     while self.running:
-            #         line = ser.readline()
-            #         if line:
-            #             val = float(line.decode('utf-8').strip())
-            #             self.buffer.append(val)
-            
             # PROZATÍMNÍ SIMULACE: Aby vlákno běželo a aplikace nespadla
             while self.running:
-                time.sleep(0.05) # Simulace frekvence 20 Hz
+                time.sleep(0.05) 
         except Exception as e:
             print(f"Chyba připojení radaru: {e}")
 
     def get_data(self):
-        # Vrátíme aktuální obsah bufferu jako Numpy pole pro FFT
         return np.array(self.buffer)
 
 class BioShieldEngine:
@@ -82,3 +71,4 @@ class DecisionEngine:
         if vitals['resp'] < self.threshold:
             return "CRITICAL"
         return "STABLE"
+        
