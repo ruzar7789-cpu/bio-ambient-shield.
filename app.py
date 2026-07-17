@@ -1,32 +1,40 @@
 import streamlit as st
 import numpy as np
-from core import BioShieldEngine, DecisionEngine
 import pandas as pd
+from datetime import datetime
+from core import BioShieldEngine, DecisionEngine
 
-st.set_page_config(page_title="Bio-Ambient Shield", layout="wide")
+# Konfigurace stránky
+st.set_page_config(page_title="Bio-Ambient Shield Pro", layout="wide")
 
-# Backend inicializace
+# Inicializace stavu aplikace (perzistence dat)
 if 'engine' not in st.session_state:
     st.session_state.engine = BioShieldEngine()
     st.session_state.decision = DecisionEngine()
+    # Inicializace historie
+    st.session_state.history = pd.DataFrame(columns=["Čas", "Stav", "Dech (BPM)"])
 
-st.title("🛡️ Bio-Ambient Shield: Enterprise Monitor")
-
-# Simulace dat (v budoucnu nahradíme vstupem ze senzoru)
+# Simulace zpracování dat (zde bude později napojení na radar)
 data = np.sin(np.linspace(0, 10, 128)) + np.random.normal(0, 0.1, 128)
-f, m = st.session_state.engine.process(data)
-v = st.session_state.engine.extract(f, m)
-state = st.session_state.decision.update(v)
+freqs, mags = st.session_state.engine.process(data)
+vitals = st.session_state.engine.extract(freqs, mags)
+status = st.session_state.decision.update(vitals)
 
-# Vizualizace
-col1, col2 = st.columns([2, 1])
+# Logování událostí do historie
+if status != "STABLE":
+    new_entry = {"Čas": datetime.now().strftime("%H:%M:%S"), "Stav": status, "Dech (BPM)": f"{vitals['resp']:.1f}"}
+    st.session_state.history = pd.concat([pd.DataFrame([new_entry]), st.session_state.history]).head(10)
+
+# UI Layout
+st.title("🛡️ Bio-Ambient Shield: Health Monitor")
+
+col1, col2 = st.columns([3, 1])
 with col1:
     st.line_chart(data)
 with col2:
-    st.metric("Dechová frekvence", f"{v['resp']:.1f} BPM")
-    st.metric("Srdeční tep", f"{v['heart']:.1f} BPM")
-    st.status(state)
+    st.metric("Dech", f"{vitals['resp']:.1f} BPM")
+    st.metric("Stav", status)
 
-# Historický log
-st.subheader("Event Log")
-st.table(pd.DataFrame(st.session_state.decision.history[-5:]))
+# Zobrazení historie (profesionální přehled)
+st.subheader("Historie kritických událostí")
+st.table(st.session_state.history)
