@@ -1,11 +1,58 @@
 import numpy as np
+import threading
+import time
+from collections import deque
+import serial 
+
+class RadarInterface:
+    """Asynchronní čtení dat z radaru přes USB/UART."""
+    def __init__(self, port='/dev/ttyUSB0', baudrate=921600, buffer_size=128):
+        self.port = port
+        self.baudrate = baudrate
+        # Kruhový zásobník (deque): jakmile se naplní 128 hodnotami, 
+        # přidání nové hodnoty automaticky vymaže tu nejstarší.
+        self.buffer = deque(maxlen=buffer_size)
+        self.buffer.extend(np.zeros(buffer_size))
+        self.running = False
+        self.thread = None
+
+    def start(self):
+        self.running = True
+        self.thread = threading.Thread(target=self._read_stream, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        self.running = False
+        if self.thread:
+            self.thread.join()
+
+    def _read_stream(self):
+        """Tato smyčka běží na pozadí a plní buffer daty z USB."""
+        try:
+            # ZATÍM ZAKOMENTOVÁNO: Reálné připojení k hardwaru
+            # with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
+            #     while self.running:
+            #         line = ser.readline()
+            #         if line:
+            #             val = float(line.decode('utf-8').strip())
+            #             self.buffer.append(val)
+            
+            # PROZATÍMNÍ SIMULACE: Aby vlákno běželo a aplikace nespadla
+            while self.running:
+                time.sleep(0.05) # Simulace frekvence 20 Hz
+        except Exception as e:
+            print(f"Chyba připojení radaru: {e}")
+
+    def get_data(self):
+        # Vrátíme aktuální obsah bufferu jako Numpy pole pro FFT
+        return np.array(self.buffer)
 
 class BioShieldEngine:
+    """Robustní DSP jádro pro analýzu vitálních funkcí."""
     def __init__(self, sampling_rate=20):
         self.sr = sampling_rate
 
     def process(self, raw_data):
-        # Pokud jsou data samá nula, vrátíme nuly
         if np.all(raw_data == 0):
             return np.array([0]), np.array([0])
             
@@ -16,7 +63,6 @@ class BioShieldEngine:
         return freqs, fft
 
     def extract(self, freqs, fft):
-        # Bezpečnostní pojistka: pokud je max FFT příliš malé, dech je 0
         if len(fft) == 0 or np.max(fft) < 0.1:
             return {"resp": 0}
             
@@ -28,12 +74,11 @@ class BioShieldEngine:
         return {"resp": resp}
 
 class DecisionEngine:
+    """Stavový automat pro detekci kritických událostí."""
     def __init__(self):
         self.threshold = 10 
 
     def update(self, vitals):
-        # Pokud je resp 0, je to CRITICAL
         if vitals['resp'] < self.threshold:
             return "CRITICAL"
         return "STABLE"
-        
