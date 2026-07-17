@@ -1,38 +1,32 @@
 import streamlit as st
 import numpy as np
 from core import BioShieldEngine, DecisionEngine
+import pandas as pd
 
-st.set_page_config(page_title="Bio-Ambient Shield Pro", layout="wide")
+st.set_page_config(page_title="Bio-Ambient Shield", layout="wide")
 
-# CSS pro profesionální vzhled
-st.markdown("""<style>
-    .stApp { background-color: #0e1117; color: white; }
-    .css-1r6slp0 { background-color: #1e1e1e; }
-</style>""", unsafe_allow_html=True)
+# Backend inicializace
+if 'engine' not in st.session_state:
+    st.session_state.engine = BioShieldEngine()
+    st.session_state.decision = DecisionEngine()
 
-engine = BioShieldEngine()
-decision = DecisionEngine()
+st.title("🛡️ Bio-Ambient Shield: Enterprise Monitor")
 
-st.title("🛡️ Bio-Ambient Shield: Monitoring Center")
+# Simulace dat (v budoucnu nahradíme vstupem ze senzoru)
+data = np.sin(np.linspace(0, 10, 128)) + np.random.normal(0, 0.1, 128)
+f, m = st.session_state.engine.process(data)
+v = st.session_state.engine.extract(f, m)
+state = st.session_state.decision.update(v)
 
-# Simulace senzoru (nahradíme daty z radaru)
-data = np.random.normal(0, 0.1, 128) + np.sin(np.linspace(0, 10, 128))
-freqs, mags = engine.process_signal(data)
-vitals = engine.extract_vitals(freqs, mags)
-status = decision.evaluate(vitals)
-
-# Dashboard Layout
-col1, col2 = st.columns([3, 1])
+# Vizualizace
+col1, col2 = st.columns([2, 1])
 with col1:
     st.line_chart(data)
 with col2:
-    st.metric("Dech", f"{vitals['resp']:.0f} BPM")
-    st.metric("Tep", f"{vitals['heart']:.0f} BPM")
+    st.metric("Dechová frekvence", f"{v['resp']:.1f} BPM")
+    st.metric("Srdeční tep", f"{v['heart']:.1f} BPM")
+    st.status(state)
 
-# Alarmová logika
-if status == "CRITICAL_ALARM":
-    st.error("!!! KRITICKÝ STAV - ZTRÁTA DECHU !!!")
-elif status == "WARNING":
-    st.warning("Detekována nepravidelnost...")
-else:
-    st.success("Systém monitoruje v normě.")
+# Historický log
+st.subheader("Event Log")
+st.table(pd.DataFrame(st.session_state.decision.history[-5:]))
